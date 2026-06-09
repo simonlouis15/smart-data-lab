@@ -1,0 +1,180 @@
+{
+    "Devices": {
+        "Pumps": {
+            "Sample 1": {
+                "Port": "COM10",
+                "Pump Number": 1,
+                "Flow Rate": 0.0,
+                "Baudrate": 9600,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1
+            },
+            "Sample 2": {
+                "Port": "COM7",
+                "Pump Number": 1,
+                "Flow Rate": 0.0,
+                "Baudrate": 9600,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1
+            },
+            "Sample 3": {
+                "Port": "COM8",
+                "Pump Number": 1,
+                "Flow Rate": 0.0,
+                "Baudrate": 9600,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1
+            },
+            "Solvent": {
+                "Port": "COM6",
+                "Pump Number": 1,
+                "Flow Rate": 0.0,
+                "Baudrate": 9600,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1
+            },
+            "HC Sample": {
+                "Port": "COM14",
+                "Pump Number": 1,
+                "Flow Rate": 0.0,
+                "Baudrate": 9600,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1
+            },
+            "HC Reference": {
+                "Port": "COM5",
+                "Pump Number": 1,
+                "Flow Rate": 0.0,
+                "Baudrate": 9600,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1
+            }
+        },
+        "Selector Valves": {
+            "Main Selector": {
+                "Port": "COM9",
+                "Baudrate": 9600,
+                "Positions": 10,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1,
+                "Connections": {"Injection": 3, "Air": 9, "Solvent": 1}
+            },
+            "Pump Selector 1": {
+                "Port": "COM3",
+                "Baudrate": 9600,
+                "Positions": 28,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1,
+                "Connections": {}
+            },
+            "Pump Selector 2": {
+                "Port": "COM4",
+                "Baudrate": 9600,
+                "Positions": 28,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1,
+                "Connections": {}
+            },
+            "Pump Selector 3": {
+                "Port": "COM11",
+                "Baudrate": 9600,
+                "Positions": 28,
+                "Bytesize": 8,
+                "Parity": "none",
+                "Stopbits": 1,
+                "Timeout": 1,
+                "Xonxoff": false,
+                "Rtscts": false,
+                "Dsrdtr": false,
+                "WriteTimeout": 1,
+                "Connections": {}
+            }
+        },
+        "DAQs": {
+            "HC DAQ": {
+                "Port": "NI9210/ai0",
+                "Frequency": 3,
+                "VolumeMin": -0.08,
+                "VolumeMax": 0.08
+            }
+        }
+    },
+    "VD Routine": {
+        "Base Routine": {
+            "Sensor": {
+                "Serial number": "",
+                "Verbose": false,
+                "Track impedance": false,
+                "Peak center tolerance": 100.0,
+                "Peak width tolerance": 20.0,
+                "Peak center reference": 32776.181,
+                "Peak width reference": 2.174
+            },
+            "Routine": {
+                "Measurements": 5,
+                "Batch size": 5,
+                "VSTD range": 0.1,
+                "DSTD range": 0.1,
+                "Syringe volume": 10,
+                "Injection time": 1
+            }
+        }
+    },
+    "HC Routine": {
+        "Base Routine": {}
+    }
+}
