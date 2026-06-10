@@ -1,51 +1,56 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useState } from 'react'
+import './App.css'
+import Devices from "./components/Devices"
+import VD_Measurements from './components/VD_Measurements'
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const navigation = [
+  { name: 'Devices', href: '/components/Devices.tsx'},
+  { name: 'V/D Measurements', href: '/components/VD_Measurements.tsx' },
+  { name: 'HC Measurements', href: '/components/HC_Measurements.tsx' },
+  { name: 'Cleaning', href: '/components/Cleaning.tsx' },
+  { name: 'Routine Manager', href: '/components/Routine_Manager.tsx' },
+]
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+function classNames(...classes: string[]) {
+  return classes.filter(Boolean).join(' ')
 }
 
-export default App;
+export default function Example() {
+
+  const [current, setCurrent] = useState('Devices')
+
+  return (
+    <>
+      <div className="min-h-full">
+        <div className="bg-gray-100">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex h-16 items-center justify-center">
+              <div className="flex items-center">
+                <div className="hidden md:block">
+                  <div className="ml-10 flex items-baseline space-x-4">
+                      {navigation.map((item) => (
+                        <button
+                          key={item.name}
+                          className={classNames(
+                            current === item.name ? 'bg-gray-300 text-gray-900' : 'text-gray-900 hover:bg-gray-200',
+                            'rounded-md px-3 py-2 text-sm font-medium',
+                          )}
+                          onClick={() => setCurrent(item.name)}
+                        >
+                          {item.name}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {current == "Devices" && <Devices />}
+        {current == "V/D Measurements" && <VD_Measurements />}
+        
+      </div>
+    </>
+  )
+}
