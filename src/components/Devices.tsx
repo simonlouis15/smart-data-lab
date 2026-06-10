@@ -1,4 +1,15 @@
-export default function Devices() {
+import { Command } from '@tauri-apps/plugin-shell';
+
+{/* Devices function. Harware devices such as pumps, valves and data acquisition are controlled here.*/}
+export default async function Devices() {
+
+    const command = Command.sidecar('binaries/my-sidecar', [
+        'arg1',
+        '-a',
+        '--arg2',
+        'any-string-that-matches-the-validator',
+    ]);
+    const output = await command.execute();
 
     const configurations = [
         { id: 1, label: "Config Alpha", description: "Primary setup" },

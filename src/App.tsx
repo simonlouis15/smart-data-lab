@@ -2,6 +2,9 @@ import { useState } from 'react'
 import './App.css'
 import Devices from "./components/Devices"
 import VD_Measurements from './components/VD_Measurements'
+import HC_Measurements from './components/HC_Measurements'
+import Cleaning from './components/Cleaning'
+import Routine_Manager from './components/Routine_Manager'
 
 const navigation = [
   { name: 'Devices', href: '/components/Devices.tsx'},
@@ -15,7 +18,8 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-export default function Example() {
+{/* Main function. Navbar defined here.*/}
+export default function App() {
 
   const [current, setCurrent] = useState('Devices')
 
@@ -49,6 +53,9 @@ export default function Example() {
         
         {current == "Devices" && <Devices />}
         {current == "V/D Measurements" && <VD_Measurements />}
+        {current == "HC Measurments" && <HC_Measurements />}
+        {current == "Cleaning" && <Cleaning />}
+        {current == "Routine Manager" && <Routine_Manager />}
         
       </div>
     </>
