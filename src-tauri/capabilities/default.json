@@ -8,16 +8,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    {
-      "identifier": "shell:allow-execute",
-      "allow": [
-        {
-          "name": "binaries/sdl",
-          "sidecar": true,
-          "args": true
-        }
-      ]
-    },
     "shell:default"
   ]
 }
