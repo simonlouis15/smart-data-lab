@@ -1,13 +1,9 @@
 import numpy as np
 import serial
-import serial.tools.list_ports
 import time
 import argparse
 import threading
 import nidaqmx
-import re
-import signal
-import sys
 from functools import partial
 from sklearn.linear_model import LinearRegression
 import xtalx.z_sensor
@@ -19,25 +15,33 @@ from datetime import datetime
 from nidaqmx.constants import AcquisitionType
 from parse_routines import load_daq_config, load_pump_config, load_valves_config, load_VD_config
 
-import cv2
-from flask import Flask, Response
-
 import threading
 import argparse
 import os
-# UI module
-import tkinter
 
 # robust logging packages
 import logging
 
 # SHOULD BE DEINFED IN mAIN: 
 logging.basicConfig(level=logging.INFO) # Set the logging level (e.g., INFO, DEBUG, WARNING, ERROR, CRITICAL)
+"""
+READ ME:
+============================================
+Main backend file for the heat capacity measurement project. Classes need to be instantiated correctly for the devices to be used in the routines, and the routines need to be added to the RoutineManager for execution.
+The RoutineManager should call all items and do the proper setup necessairly, all thats required are the device numbers and parameters. Since the code is a bit old, I suggest looking through the routine manager
+to ensure that the devices and routiens are being called properly. To do so, check out the "10ml ones - copy.py" file for how the old code was running prior to this refactor; specifically the device setup and routine runs.
+The "main.py" file was an old test file used to test the device connections. It should serve as an example for how to instantiate the devices and run the routines, but it is not fully updated to reflect the new code structure.
+============================================
+"""
 
 
-# ============================================
-# Global Thread Management Functions
-# ============================================
+"""
+============================================
+Global Thread Management Functions
+============================================
+Helper functions for starting and joining multiple threads. Used for running device operations in parallel.
+"""
+
 
 def start_threads(threads: list):
     """
@@ -88,25 +92,16 @@ def run_functions_parallel(functions: list, with_args: bool = False):
 
 
 '''
-Let's start by creating classes to create syrial objects
-
-Serial Device will be the main class that's defined to be used as a superclass. 
-That is, all other device definitions will be defined off of this one class, and we can override the innit
-properties if need be.
-
-PARAMS:
-port = communication port of the device that it is defined to
-baudrate = speed of data transmissions in the system
-    - set to 9600 by default
-
-ATTRIBUTES:
-.....
-
+============================================
+Serial Devices Base Class
+============================================
+Base classes defining devices used in the project. Each device must be instantiated using the below classes.
 '''
-
-
-
 class SerialDevice:
+    '''
+    Initializes serial device connection with configurable parameters. This is the base device class for all serially connected devices (e.g., selector valve, pumps). 
+    It provides basic read/write functionality and can be extended with device-specific commands in child classes.
+    '''
     def __init__(self, port, timeout, xonxoff, rtscts, dsrdtr, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, baudrate=9600, name='', ):
         self.ser = serial.Serial(
             port=port,
@@ -130,14 +125,12 @@ class SerialDevice:
 
 
 '''
-Selector Valve Code and Functions
-Also includes setup for access to cleaning functions like air and solvent cleaning
-
-Now lets define a child class for SerialDevice, which is specifically for the selector valve.
-
+============================================
+Selector Valve Class
+============================================
+Also includes setup for access to cleaning functions like air and solvent cleaning.
+in this case, experiment uses I think 3-4 connections which houses the 3 pumps, air, and an output valve
 '''
-# needs: port, baudrate, name, list of connections 
-# in this case, experiment uses I think 3-4 connections which houses the 3 pumps, air, and an output valve
 
 class SelectorValve(SerialDevice):
     """
@@ -194,15 +187,6 @@ class SelectorValve(SerialDevice):
         Args:
             position (int): Position to move to (1-based index).
         """
-        # if valve setup not complete or there are no valve positions configured
-        # if not (self.setup_complete):
-        #     # TODO: Set up proper error logging and try-except chains to catch issues early on.
-        #     logging.error("Selector valve must be set up before use.")
-        #     raise RuntimeError("Selector valve must be set up before use.")
-        # if  not ( (position in self.valve_positions) or (self.valve_positions) ):
-        #     logging.error(f"Position {position} is out of range for valve with {self.valve_positions} positions.")
-        #     raise ValueError(f"Position {position} is out of range for valve with {self.valve_positions} positions.")
-        
         # NOTE: check if sleeps are needed between each read/write/command for the valve
         # Format must be zero-padded if < 10
         print(f"passed position: {position}")
@@ -241,21 +225,26 @@ class SelectorValve(SerialDevice):
         self.move_to(self, position)
     
 '''
+============================================
 Pump Device setup (subclass of serial device)
+============================================
+Defines pump-specific commands and functions for controlling the Hamiltonian syringe pumps. 
+Requires pump number, port, and optional parameters like flow rate and baud rate. Provides functions for initializing the pump, sending commands, waiting for readiness, and performing injections.
 '''
-# pumps need: port, pump num, name/label/description (pump 1, pump 2)
-# optional:  baudrate (optional), flow rate (optional) 
-# NOTE: the things the pump does and the fluids the pumps controle are adjustable in 
-# the routines or smthn; shouldn't be in pumps definition 
-# pump data for mass initialization and overall device definition can be passed in as a csv or defined manually in the app.
-# scan
-# NOTE: pumps should start with 3 defined pumps following the definitions in the code
-# NOTE: need to fix the bg of the container of the pumps to be lighter gray, add typing to the input fields + ensure that ppl can't define an empty pump object
-# General styling should be added in figma cuz gpt is stupid.
 
 class Pump(SerialDevice):
     def __init__(self, port, pump_num, name, bytesize, parity, stopbits, timeout, xonxoff, rtscts, dsrdtr, flow_rate=0, baudrate=9600):
-        # use super class' device initialization
+        '''
+        Initializes a pump device with specified parameters.
+
+        Args:
+            port (str): Serial port the pump is connected to.
+            pump_num (int): Identifier for the pump (e.g., 1, 2, 3).
+            name (str): Name of the pump for logging purposes.
+            flow_rate (float): Initial flow rate for the pump (default 0). Note: flow rate is typically set via specific commands, so this may just be a stored attribute rather than an active setting on initialization
+            others args: Serial communication parameters.
+
+        '''
         super().__init__(
             port=port,
             baudrate=baudrate,
@@ -273,9 +262,9 @@ class Pump(SerialDevice):
 
     def send_command(self, command):
         """
+        Sends a command to the pump and waits for it to be ready before proceeding.
         Based off of START_pumpSample functions
         """
-        # NOTE: What if I stop all commands before sending another here instead?
         # I.e., send command "T" to stop all actions before sending a new command
         if not (self.pump_num):
             return
@@ -287,41 +276,29 @@ class Pump(SerialDevice):
         self.wait_until_ready() # pings pump until no actions remain
         time.sleep(0.51)
         try: 
-            #TODO: (logging related) print ("Attempt to Read")
             time.sleep(0.5)
             readOut = self.read()
             time.sleep(0.5)
-            #TODO: (logging related) print ("Reading: ", readOut) 
             self.write(full_cmd)
             print(f"Pump {self.name} read command response: {readOut}")
         except Exception as e:
             logging.error(f"Error reading from pump: {e}")
         
-        # Untouched (old) code below:
-        # while True:
-        #     try:
-        #         #TODO: (logging related) print ("Attempt to Read")
-        #         time.sleep(0.5)
-        #         readOut = serSample1.readline().decode("utf-8")
-        #         time.sleep(0.5)
-        #         #TODO: (logging related) print ("Reading: ", readOut) 
-        #         serSample1.write(full_cmd)
-        #         break
-        #     except:
-        #         if readOut == "0@":
-        #             break
-        #             ser.flush() #flush the buffer
-        #         elif readOut !="0@":
-        #             pass
-        #             #print("Restart")
-        #     break
-
     def initialize(self,
                    syringe_size: int = 30,
                    zero_units: int = 100,
                    zero_accel: int = 0,
                    fill_units: int = 100,
                    fill_speed: int = 6000):
+        '''
+        Initializes the pump by setting syringe size, zeroing the plunger, and filling to a specified amount.
+        Args:
+            syringe_size (int): Size of the syringe in mL (default 30 mL)
+            zero_units (int): Units to aspirate for zeroing the plunger (default 100 units, which is 5 mL since 1 unit = 0.05 mL)
+            zero_accel (int): Acceleration for zeroing the plunger (default 0, which means no acceleration)
+            fill_units (int): Units to aspirate for filling the syringe (default 100 units, which is 5 mL)
+            fill_speed (int): Speed for filling the syringe (default 6000, which is the maximum speed for the pump)
+        '''
         
         # Syringe size + zero plunger
         self.send_command(f"Y{syringe_size}z")
@@ -333,12 +310,12 @@ class Pump(SerialDevice):
         self.send_command(f"OV{fill_units}P{fill_speed}")
 
     def wait_until_ready(self):
-        """
+        '''
         Blocks until the pump is ready to receive the next command.
 
         It sends the 'F' (status) command and checks the response. Loop continues until
         the pump returns a status that is NOT '@' (busy) or 'o' (moving).
-        """
+        '''
         response = ""
         while(not ("@" in response or "0" in response)):
             command = f"/{self.pump_num}F\r\n"
@@ -360,8 +337,6 @@ class Pump(SerialDevice):
         self.send_command(cmd)
         print("Injection Complete")
 
-    # TODO: look into if we need these fast or slow injections or if we can just define these
-    # functions inside of the routines when we get there.
     def full_injection(self, volume_ml: float, accel: int):
         """
         Controlled injection with specified acceleration.
@@ -399,26 +374,20 @@ class Pump(SerialDevice):
         """
         Based off of PumpCleaning_pumpSample1
         """
-        # NOTE: Why are we even withdrawing to begin with? whats this for and what are we withdrawing
         self.fast_empty(flush_volume)
         self.withdraw(withdraw_volume)
         self.fast_empty(flush_volume)
 
 
-# TODO: Add some functions for changing the pumps flow rate for the samples held.  (I think?? Function is called pump_flow_rate.)
-# TODO: REVIEW ALL OF THE EXISTING FUNCTIONS AND CLASSES I DEFINED AND MAKE SURE THEY ARE NOT ONLY TRUE TO THE CODE BUT ALSO CORRECT AND NECESSAIRY!!
-# TODO: Consider cleaning routines and whether or not every object needs to have a cleaning routine
-# TODO: Store flow rate as a value specific to each pump that can be changed w/ methods?
 """
-DAQ  Device Setup
+============================================
+Data Aqcuisition (DAQ) Device Class
+============================================
+Defines a class for handling NI DAQ devices used for voltage measurements in the heat capacity experiment.
+Includes initialization, voltage reading, stabilization checking, and data collection functions.
 """
-class DAQDevice:
-    """
-    DAQ (Data Acquisition) device class for heat capacity computation.
-    This class handles NI DAQ initialization, data acquisition, and 
-    heat capacity calculations.
-    """
 
+class DAQDevice:
     def __init__(self, port_name="NI9210/ai0", daq_frequency=3, min_vol=-0.08, max_vol=0.08):
         """
         Initialize the DAQ device.
@@ -777,16 +746,12 @@ class DAQDevice:
 
 
 '''
-Code for Routines 
+============================================
+Routine Management Classes
+============================================
+Defines classes for managing the overall experimental routine, including orchestrating the VD sensor measurements, DAQ data collection, and device control. 
+This includes the VDRoutine class which integrates the VD sensor with the DAQ and provides functions for running full measurement routines.
 '''
-
-# 
-# needs: serial number, label (just for safe keeping)
-# optional variables: verbose, track_impedence, peak center tolerance (all other peak definitions for cleaning purposes)
-
-# DAQ
-# needs: port_name, channel, device name
-# optional: sample_rate, samples_per_channel, aquisition mode, min voltage, max voltage,
 
 class VDRoutine:
     """
@@ -802,11 +767,24 @@ class VDRoutine:
                  PEAK_CENTER_REFERENCE = 32776.181,
                  PEAK_WIDTH_REFERENCE = 2.174,
                  measurements=5, batchsize=5, VSTD_range=0.1, DSTD_range=0.1):
+        '''
+        Initializes the VDRoutine with specified parameters and sets up the VD sensor. 
+        Args:
+            serial_number (str): Serial number of the VD sensor to connect to (optional)
+            verbose (bool): Whether to enable verbose logging for the VD sensor (default False)
+            track_impedance (bool): Whether to track impedance instead of yield (default False)
+            PEAK_CENTER_TOLERANCE_HZ (float): Tolerance for peak center frequency in Hz (default 100 Hz)
+            PEAK_WIDTH_TOLERANCE_HZ (float): Tolerance for peak width (FWHM) in Hz (default 20 Hz)
+            PEAK_CENTER_REFERENCE (float): Reference value for peak center frequency in Hz (default 32776.181 Hz)
+            PEAK_WIDTH_REFERENCE (float): Reference value for peak width (FWHM) in Hz (default 2.174 Hz)
+            measurements (int): Number of measurements to take in the routine (default 5)
+            batchsize (int): Number of measurements to take before calculating batch statistics (default 5)
+            VSTD_range (float): Standard deviation threshold for viscosity measurements to consider a batch valid (default 0.1 cP)
+        '''
 
         # Details for the peak values that the VD sensor will detect
-        # This is primairly and I think only used for determining if the sensor is clean or not.
-        # NOTE: It looks like these values are no longer used to check if the sensor is clean ? 
-        # Ask if this is true or not, and see if the function is_sensor_clean_in_air(pq) is still used.
+        # This is primairly (I think) only used for determining if the sensor is clean or not.
+
         self.peak_center_reference = PEAK_CENTER_REFERENCE
         self.peak_center_tolerance = PEAK_CENTER_TOLERANCE_HZ
         self.peak_width_reference = PEAK_WIDTH_REFERENCE
@@ -846,29 +824,14 @@ class VDRoutine:
         """
         Used to start the V/D Sensor and configure it to a predicate queue
         Based off of the start_dv_sensor_and_get_queue function. Note that args uses default
-        arguments for za and zl
+        arguments for za and zl.
         """
-        # NOTE: while args is used for the za and zl, its missing important values such as 
-        # nfreqs, search_time_secs, sweep_time_secs, 
-        # These are passed in as defaulet arguments which are defined here (from old code:)
-        # This is where the args parameter should come from
-        # ========
-        # parser = argparse.ArgumentParser()
-        # z_common.add_arguments(parser)
-        # args = parser.parse_args()
-        # tc, pq, pt = start_dv_sensor_and_get_queue(args)
-        # print ('Found D/V sensor %s.' % tc.serial_num)
-        # ========
-        # NOTE there are def ways to define amplitutde, f0 and what not without using libraries,
-        # but since these are all already pre-defined, I think I will scrap this idea for now,
-        # as it doesn't seem like they need it. 
 
         device = xtalx.z_sensor.find_one(serial_number=self.serial_number)
         self.tc = xtalx.z_sensor.make(device, verbose=self.verbose,
                                       yield_Y=not self.track_impedance)
 
-        # NOTE: Do we need args here? can't I just pass in my own arguments?
-        # Answ: Yes, because parse_args expects a tc and CLI style arguments object
+        # Arqs required here because parse_args expects a tc and CLI style arguments object
         za, zl = z_common.parse_args(self.tc, args)
 
         self.pq = xtalx.z_sensor.PredicateQueue(delegate=z_common.ZDelegate(zl))
@@ -901,10 +864,7 @@ class VDRoutine:
                 self.density.append(m.density_g_per_ml)
                 self.temperature.append(m.fw_fit.temp_c)
                 self.trial_ids.append(trial_id)
-                # NOTE: trial_id is not defined in the original code
-                # Will just be given by i + 1 as defined in the code for now, but need to ask
-                # what this is for later!
-
+                # NOTE: trial_id is not defined in the original code - we should make sure to pass it in when calling get_measurement in the main routine function
                 print('   Density: %s' % m.density_g_per_ml)
                 print(' Viscosity: %s' % m.viscosity_cp)
                 print('   Peak Hz: %s' % m.peak_hz)
@@ -914,6 +874,7 @@ class VDRoutine:
             
             time.sleep(0.1)
         
+        # NOTE: Old code below 
         # result = self.pq.dequeue(timeout=timeout)
         # if result:
         #     visc = getattr(result, 'viscosity', None)
@@ -968,7 +929,11 @@ class VDRoutine:
         join_threads(injection_threads)
 
     def validate_STD(self, num_stats_batch=5, VSTD_range=0.1, DSTD_range=0.1):
-                #check if the STD is within the correct range
+        """
+         Function to validate that the standard deviation of the viscosity and density measurements are within a specified range. 
+         If the standard deviation is not within the range, it will continue to take measurements until it is. This function assumes that the first (num_stats_batch) measurements have already been taken and are stored in the viscosity and density lists.
+        """
+        # check if the STD is within the correct range
         # NOTE: indexing arrays to always view the first (X) measurements in the list 
         start = 0
         end = num_stats_batch
@@ -1003,6 +968,7 @@ class VDRoutine:
         """
         # TODO: Add error handling here to ensure that people provide the correct range of measurements and stats batch size
         # i.e., num_stats_batch MUST be <= num_measurements. 
+
         # Define batch V/D as empty arrays
         print("Experiment in progress....")
         BatchV = []
@@ -1019,7 +985,6 @@ class VDRoutine:
     
         # NOTE: moved measurements for the V/D sensor to the validate_STD function
         BatchV, BatchD, BatchT, V_STD, D_STD = self.validate_STD(num_stats_batch, VSTD_range, DSTD_range)
-        # Summarize - maybe write to file.
         #v = sum(m.density_g_per_ml for m in measurements) / len(measurements)
         #d = sum(m.viscosity_cp for m in measurements) / len(measurements)
         Mean_V = sum(BatchV)/len(BatchV)
@@ -1291,117 +1256,117 @@ class HCRoutine:
 
 
 
-    #     # Visualization setup
-    #     fig, ax = plt.subplots()
-    #     x_data, y_data = [], []
-    #     line, = ax.plot([], [])
-    #     plt.xlabel('Time [s]')
-    #     plt.ylabel('Voltage [V]')
-    #     plt.title('Live Data Visualization')
-    #     ax.set_xlim([0, 500])  # Initial x-axis limit set to 500 seconds
+        # Visualization setup
+        fig, ax = plt.subplots()
+        x_data, y_data = [], []
+        line, = ax.plot([], [])
+        plt.xlabel('Time [s]')
+        plt.ylabel('Voltage [V]')
+        plt.title('Live Data Visualization')
+        ax.set_xlim([0, 500])  # Initial x-axis limit set to 500 seconds
 
-    #     y_axis_margin = 1e-5  # y-axis margin of 1e-5
-    #     ax.set_ylim([-y_axis_margin, y_axis_margin])  # Initial y-axis limits
+        y_axis_margin = 1e-5  # y-axis margin of 1e-5
+        ax.set_ylim([-y_axis_margin, y_axis_margin])  # Initial y-axis limits
 
-    #     plt.ion()
-    #     plt.show(block=False)
-    #     x_counter = 0
+        plt.ion()
+        plt.show(block=False)
+        x_counter = 0
         
 
-    #     all_data = []
+        all_data = []
 
-    #     for i_exp, protocol in enumerate(exp_Protocol):
-    #         sample_rate, ref_rate, duration = protocol
-    #         print(f"Starting experiment step {i_exp + 1}/{len(exp_Protocol)} with sample rate {sample_rate} mL/min.")
+        for i_exp, protocol in enumerate(exp_Protocol):
+            sample_rate, ref_rate, duration = protocol
+            print(f"Starting experiment step {i_exp + 1}/{len(exp_Protocol)} with sample rate {sample_rate} mL/min.")
 
-    #         PumpInjection_pump1_HC(sample_rate)
-    #         PumpInjection_pump2_HC(ref_rate)
+            PumpInjection_pump1_HC(sample_rate)
+            PumpInjection_pump2_HC(ref_rate)
 
-    #         step_master_cond = False
-    #         seg_loop_counter = 0
-    #         seg_mean_mem = []
-    #         data_in_loop = []
+            step_master_cond = False
+            seg_loop_counter = 0
+            seg_mean_mem = []
+            data_in_loop = []
 
-    #         while not step_master_cond:
-    #             segment_data = []
-    #             for idx in range(seg_step_duration * daq_freq):
-    #                 voltage = daq.read_voltage()
-    #                 data_in_loop.append(voltage)
-    #                 segment_data.append(voltage)
-    #                 x_data.append(x_counter / daq_freq)
-    #                 y_data.append(voltage)
-    #                 x_counter += 1
+            while not step_master_cond:
+                segment_data = []
+                for idx in range(seg_step_duration * daq_freq):
+                    voltage = daq.read_voltage()
+                    data_in_loop.append(voltage)
+                    segment_data.append(voltage)
+                    x_data.append(x_counter / daq_freq)
+                    y_data.append(voltage)
+                    x_counter += 1
 
-    #                 # Update visualization every second
-    #                 if idx % daq_freq == 0:
-    #                     # Update plot
-    #                     line.set_data(x_data, y_data)
-    #                     # Adjust x-axis if necessary
-    #                     current_xlim = ax.get_xlim()
-    #                     if x_counter / daq_freq > current_xlim[1]:
-    #                         ax.set_xlim(current_xlim[0], current_xlim[1] + 200)  # Add 200 seconds to x-axis
-    #                     # Adjust y-axis if necessary
-    #                     current_ylim = ax.get_ylim()
-    #                     if max(y_data) > current_ylim[1] or min(y_data) < current_ylim[0]:
-    #                         ax.set_ylim(min(y_data) - y_axis_margin, max(y_data) + y_axis_margin)
-    #                     ax.relim()
-    #                     ax.autoscale_view()
-    #                     plt.pause(0.01)
+                    # Update visualization every second
+                    if idx % daq_freq == 0:
+                        # Update plot
+                        line.set_data(x_data, y_data)
+                        # Adjust x-axis if necessary
+                        current_xlim = ax.get_xlim()
+                        if x_counter / daq_freq > current_xlim[1]:
+                            ax.set_xlim(current_xlim[0], current_xlim[1] + 200)  # Add 200 seconds to x-axis
+                        # Adjust y-axis if necessary
+                        current_ylim = ax.get_ylim()
+                        if max(y_data) > current_ylim[1] or min(y_data) < current_ylim[0]:
+                            ax.set_ylim(min(y_data) - y_axis_margin, max(y_data) + y_axis_margin)
+                        ax.relim()
+                        ax.autoscale_view()
+                        plt.pause(0.01)
 
-    #             # Segment Analysis
-    #             seg_mean = np.mean(segment_data)
-    #             seg_std = np.std(segment_data)
-    #             seg_mean_mem.append(seg_mean)
+                # Segment Analysis
+                seg_mean = np.mean(segment_data)
+                seg_std = np.std(segment_data)
+                seg_mean_mem.append(seg_mean)
 
-    #             if seg_loop_counter < num_consecutive_seg:
-    #                 seg_loop_counter += 1
-    #             elif seg_loop_counter < max_num_seg:
-    #                 if within_linient_segment_variation_limit(seg_mean_mem[-num_consecutive_seg:], segment_variation_abs):
-    #                     step_master_cond = True
-    #                     step_data_4analysis[i_exp] = np.mean(seg_mean_mem[-num_consecutive_seg:])
-    #                     passed_flow_rates.append(i_exp)
-    #                     print(f"Stabilization achieved at step {i_exp + 1}.")
-    #                 else:
-    #                     seg_loop_counter += 1
-    #             else:
-    #                 print(f"Flow rate {sample_rate} mL/min failed to stabilize completely. Removing from regression analysis.")
-    #                 failed_flow_rates.append(i_exp)
-    #                 step_master_cond = True
+                if seg_loop_counter < num_consecutive_seg:
+                    seg_loop_counter += 1
+                elif seg_loop_counter < max_num_seg:
+                    if within_linient_segment_variation_limit(seg_mean_mem[-num_consecutive_seg:], segment_variation_abs):
+                        step_master_cond = True
+                        step_data_4analysis[i_exp] = np.mean(seg_mean_mem[-num_consecutive_seg:])
+                        passed_flow_rates.append(i_exp)
+                        print(f"Stabilization achieved at step {i_exp + 1}.")
+                    else:
+                        seg_loop_counter += 1
+                else:
+                    print(f"Flow rate {sample_rate} mL/min failed to stabilize completely. Removing from regression analysis.")
+                    failed_flow_rates.append(i_exp)
+                    step_master_cond = True
 
-    #         # Pumps Stop
-    #         Stop_pump1_HC()
-    #         Stop_pump2_HC()
+            # Pumps Stop
+            Stop_pump1_HC()
+            Stop_pump2_HC()
 
-    #         # Data Packaging for Analysis
-    #         exp_data = np.zeros((len(data_in_loop), 4))
-    #         exp_data[:, 1] = np.array(data_in_loop)
-    #         exp_data[:, 0] = np.linspace(0, (len(data_in_loop) - 1) * (1 / daq_freq), len(data_in_loop))
-    #         exp_data[:, 2] = ref_rate  # Reference rate
-    #         exp_data[:, 3] = sample_rate  # Sample rate
+            # Data Packaging for Analysis
+            exp_data = np.zeros((len(data_in_loop), 4))
+            exp_data[:, 1] = np.array(data_in_loop)
+            exp_data[:, 0] = np.linspace(0, (len(data_in_loop) - 1) * (1 / daq_freq), len(data_in_loop))
+            exp_data[:, 2] = ref_rate  # Reference rate
+            exp_data[:, 3] = sample_rate  # Sample rate
 
-    #         all_data.extend(exp_data)
+            all_data.extend(exp_data)
 
-    #         print(f"Finished experiment step {i_exp + 1}/{len(exp_Protocol)}.")
+            print(f"Finished experiment step {i_exp + 1}/{len(exp_Protocol)}.")
 
-    #     plt.ioff()
-    # #plt.show()
+        plt.ioff()
+        plt.show()
 
-    #     # Close connections
-    #     daq.close()
-    #     # Register signal handlers
-    #     #signal.signal(signal.SIGINT, cleanup)  # Handle Ctrl+C
-    #     #signal.signal(signal.SIGTERM, cleanup) # Handle termination signal
-    #     #sample_pump.close()
-    #     #ref_pump.close()
+        # Close connections
+        daq.close()
+        # Register signal handlers
+        #signal.signal(signal.SIGINT, cleanup)  # Handle Ctrl+C
+        #signal.signal(signal.SIGTERM, cleanup) # Handle termination signal
+        #sample_pump.close()
+        #ref_pump.close()
 
-    #     plt.close('all')
-    #     plt.pause(0.001)
+        plt.close('all')
+        plt.pause(0.001)
 
-    #     now=date.today()
-    #     timenow=datetime.now()
-    #     # Save data
-    #     df = pd.DataFrame(all_data, columns=['Time [s]', 'Voltage [V]', 'ref_rate', 'sample_rate'])
-    #     df.to_excel(f'C:/Users/Indus/OneDrive/Desktop/26 Campaign/{batch}/{batch}-water-{m1}{f1}+{m2}{f2}+{m3}{f3}_{now}.xlsx', index=False)
+        now=date.today()
+        timenow=datetime.now()
+        # Save data
+        df = pd.DataFrame(all_data, columns=['Time [s]', 'Voltage [V]', 'ref_rate', 'sample_rate'])
+        df.to_excel(f'C:/Users/Indus/OneDrive/Desktop/26 Campaign/{batch}/{batch}-water-{m1}{f1}+{m2}{f2}+{m3}{f3}_{now}.xlsx', index=False)
 
         # Perform regression analysis on collected data
         # NOTE: I'm not really all too sure what this all is?
@@ -1657,6 +1622,10 @@ class RoutineManager:
         # TODO: remove this later since this should be created by the process sheets for pumps class.
         # The only actual variable that we need is the ones passed into process pumps for sheets.
         # TODO: instead define the new changed variables above w/ self. notation later.
+        """
+        Initializes the RoutineManager with pump, valve, and DAQ configurations.
+        Sets up the necessary equipment based on provided configurations and prepares routines.
+        """
 
         self.routines = []
 
@@ -1795,9 +1764,16 @@ class RoutineManager:
         # otherwise, configure diff loadouts for the routines that will be hardcoded for now.
 
     def add_routine(self, routine):
+        """
+        Adds a routine to the RoutineManager's list of routines to run.
+        :param routine: A function or callable that represents a routine to be executed.
+        """
         self.routines.append(routine)
 
     def run_all(self):
+        """
+        Executes all routines that have been added to the RoutineManager in sequence.
+        """
         for routine in self.routines:
             routine.run()
 
@@ -1807,6 +1783,9 @@ class RoutineManager:
     def clean_all(self, pump:Pump, pump_valve:SelectorValve, refill_volume=25, inject_volume=20, inject_duration=960, iterations=5, position:int=9):
         # pump num 1 handles solvent so assume pump is passed in
         # first, load in the solvent 
+        """
+        This function handles the cleaning of the sensors by running the pump through a series of solvent refills, air drying, and sample injections.
+        """
         self.refill_solvent(self, pump, refill_volume)
 
         # put the line into air for x amount of iterations
@@ -1838,7 +1817,9 @@ class RoutineManager:
         valve.confirm_position()
 
     def hc_cleaning(self, hc_pump:Pump, empty_volume, refill_volume, inject_volume):
-        
+        """
+        This function handles the cleaning of the HC sensors by running the pump through a series of solvent refills, air drying, and sample injections.
+        """
         print('HC Cleaning Started')
         hc_pump.fast_empty(empty_volume)
         
@@ -1861,6 +1842,9 @@ class RoutineManager:
             time.sleep(1)
     
     def hc_cleaning_switch(self, hc_pump:Pump, empty_volume, refill_volume):
+        """
+        This function handles the cleaning of the HC sensors by running the pump through a series of solvent refills and fast emptying.
+        """
         print('HC Cleaning Started')
         hc_pump.fast_empty(empty_volume)
 
@@ -1927,6 +1911,10 @@ class RoutineManager:
 
         # NOTE: For now we will hardcode threading, but this will be determined by the routine 
         # manager who will run all of the routines w/ the corresponding tags in parallel.
+        """
+         This function runs the refilling of solvent and sample concurrently with the V/D measurement routine.
+         It ensures that the refilling processes do not block the V/D measurements, allowing for efficient use of time during the experiment.
+        """
         routine_threads = []
         routine_threads.append(threading.Thread(target=self.refill_solvent))
         routine_threads.append(threading.Thread(target=self.refill_sample))
@@ -1947,6 +1935,11 @@ class RoutineManager:
         return Mean_D, Mean_V, Mean_T, V_STD, D_STD
     
     def flow_rate_injection(self, pumps: list[Pump] = None, syringe_volume: float = 10, injection_time: float = 1):
+        """
+        This function handles the debubbling and injection of the samples based on the flow rates set for each pump.
+         It calculates the duration of injection based on the flow rate and syringe volume, and runs the debubbling and injection processes concurrently for all pumps provided in the list. If no pumps are provided, it defaults to an empty list and simply runs the injection mode without any pump actions.
+         The injection mode is activated at the start of the function, and a message is printed to indicate the start of pumping. After the processes are completed, a message is printed to indicate the stop of pumping. 
+        """
         if pumps is None:
             pumps = {}
 
@@ -2154,6 +2147,10 @@ class RoutineManager:
                     routine(compositions, sheet, chems0, chems1, chems2)
 
     def safe_run_routines(self):
+        """
+        This function runs the routines that have been added to the RoutineManager in a safe manner, ensuring that necessary preconditions are met before execution.
+        For example, it can set flow rates for sample pumps before running routines that depend on those flow rates, and it can handle any exceptions that may arise during routine execution to prevent crashes and provide informative error messages.
+        """
         flow_rate_mm_sample1 = round(10, 3) * 10
         flow_rate_mm_sample2 = round(10, 3) * 10
         flow_rate_mm_sample3 = round(10, 3) * 10
@@ -2169,6 +2166,9 @@ class RoutineManager:
                 routine()
 
     def test_connections(self):
+        """
+         This function is for testing the connections to the pumps, valves, and DAQ devices. It can be used to ensure that all equipment is properly connected and communicating before running the main routines.
+        """
         print("Testing Connections")
         # pump = self.pumps.get("Sample 1")
         # label = "Sample 1"

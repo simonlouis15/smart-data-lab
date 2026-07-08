@@ -1,0 +1,10 @@
+# Select Valve Set-Up
+INJECTION_MODE = 3
+AIR_MODE = 9
+SOLVENT_MODE = 1
+
+# Serial Device Commands
+QUERY_CURRENT_POS = "/1?"
+CONFIRM_POS = "/1CP"
+STOP_PUMP = "/1T"
+STOP_ALL_ACTIONS = "T"

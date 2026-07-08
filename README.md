@@ -68,4 +68,11 @@ Simon Louis - simonlouis1932@gmail.com
 <!-- ACKNOWLEDGMENTS -->
 ## Acknowledgments
 
-Special thanks to Sana Jalalzadeh-Azar for creating the SDL hardware controls.
+Special thanks to Sana Jalalzadeh-Azar for her work on the SDL hardware controls.
+
+## Notes for me
+
+- Find out about what each of the config settings do
+- Find out how the tasks Maryam asked me to do align with the UI in the slides she sent
+- What does each part of that UI do
+- 

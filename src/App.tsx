@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import './App.css';
-import Devices from './components/Devices';
-import VD_Measurements from './components/VD_Measurements';
-import HC_Measurements from './components/HC_Measurements';
-import Cleaning from './components/Cleaning';
-import Routine_Manager from './components/Routine_Manager';
+import Devices from './components/Devices/page';
+import VD_Measurements from './components/VDMeasurements';
+import HC_Measurements from './components/HCMeasurements';
+import CleaningOperations from './components/CleaningOperations/page';
+import Routine_Manager from './components/RoutineManager';
 
 const navigation = [
-  { name: 'Devices', href: '/components/Devices.tsx' },
-  { name: 'V/D Measurements', href: '/components/VD_Measurements.tsx' },
-  { name: 'HC Measurements', href: '/components/HC_Measurements.tsx' },
-  { name: 'Cleaning', href: '/components/Cleaning.tsx' },
-  { name: 'Routine Manager', href: '/components/Routine_Manager.tsx' },
+  { name: 'Devices', href: '/components/Devices' },
+  { name: 'V/D Measurements', href: '/components/VD_Measurements' },
+  { name: 'HC Measurements', href: '/components/HC_Measurements' },
+  { name: 'Cleaning Operations', href: '/components/CleaningOperations' },
+  { name: 'Routine Manager', href: '/components/Routine_Manager' },
 ];
 
 function classNames(...classes: string[]) {
@@ -53,7 +53,7 @@ export default function App() {
         {current == 'Devices' && <Devices />}
         {current == 'V/D Measurements' && <VD_Measurements />}
         {current == 'HC Measurments' && <HC_Measurements />}
-        {current == 'Cleaning' && <Cleaning />}
+        {current == 'Cleaning Operations' && <CleaningOperations />}
         {current == 'Routine Manager' && <Routine_Manager />}
       </div>
     </>
