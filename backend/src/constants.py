@@ -1,4 +1,4 @@
-# Select Valve Set-Up
+# Selector Valve Set-Up
 INJECTION_MODE = 3
 AIR_MODE = 9
 SOLVENT_MODE = 1

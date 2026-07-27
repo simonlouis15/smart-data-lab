@@ -8,7 +8,7 @@ Defines pump-specific commands and functions for controlling the Hamiltonian syr
 Attributes:
     port (str): Serial port the pump is connected to.
     pump_num (int): Identifier for the pump (e.g., 1, 2, 3).
-    name (str): Name of the pump for logging purposes.
+    name (str): Name of the pump for logger purposes.
     flow_rate (float): Initial flow rate for the pump (default 0). Note: flow rate is typically set via specific commands, so this may just be a stored attribute rather than an active setting on initialization
     others args: Serial communication parameters.
 
@@ -16,12 +16,10 @@ Requires pump number, port, and optional parameters like flow rate and baud rate
 '''
 
 import time
-from loguru import logging
+from loguru import logger
 
-from serial_device import SerialDevice
-from ..src.constants import (
-    STOP_ALL_ACTIONS
-)
+from modules.serial_device import SerialDevice
+from src.constants import STOP_ALL_ACTIONS
 
 # NOTE: the things the pump does and the fluids the pumps controle are adjustable in 
 # the routines or smthn; shouldn't be in pumps definition 
@@ -31,8 +29,16 @@ from ..src.constants import (
 # NOTE: need to fix the bg of the container of the pumps to be lighter gray, add typing to the input fields + ensure that ppl can't define an empty pump object
 
 class Pump(SerialDevice):
-    def __init__(self, port, pump_num:int, name:str, flow_rate= 0, baudrate:int= 9600):
-        super().__init__(port, baudrate, name)
+    def __init__(
+        self,
+        port,
+        pump_num: int,
+        name: str,
+        flow_rate=0,
+        baudrate: int = 9600,
+        **serial_kwargs,
+    ):
+        super().__init__(port, baudrate, name, **serial_kwargs)
         self.pump_num = pump_num
         self.flow_rate = flow_rate
 
@@ -49,18 +55,18 @@ class Pump(SerialDevice):
             self.wait_until_ready()
             time.sleep(0.5)
             self.write(full_cmd)
-            logging.INFO("Success reading from pump")
+            logger.info("Success reading from pump")
         except:
-            logging.ERROR("Error reading from pump")
+            logger.error("Error reading from pump")
         
         # Untouched (old) code below:
         # while True:
         #     try:
-        #         #TODO: (logging related) print ("Attempt to Read")
+        #         #TODO: (logger related) print ("Attempt to Read")
         #         time.sleep(0.5)
         #         readOut = serSample1.readline().decode("utf-8")
         #         time.sleep(0.5)
-        #         #TODO: (logging related) print ("Reading: ", readOut) 
+        #         #TODO: (logger related) print ("Reading: ", readOut) 
         #         serSample1.write(full_cmd)
         #         break
         #     except:
@@ -106,19 +112,18 @@ class Pump(SerialDevice):
         It sends the 'F' (status) command and checks the response. Loop continues until
         the pump returns a status that is NOT '@' (busy) or 'o' (moving).
         """
-        response = ""
-        while(not ("@" in response or "0" in response)):
-            command = f"/{self.pump_num}F\r\n"
+        response = "@"
+        while("@" in response or "o" in response):
+            command = f"/{self.pump_num}FR\r\n"
             self.write(command)
             time.sleep(0.5)
             response = self.read()
-            logging.INFO(f"Pump {self.pump_num} ready status: {response}")
+            logger.info(f"Pump {self.pump_num} ready status: {response}")
+            
 
-    def inject(self, volume, duration=0, accel=None):
-        if accel is not None:
-            cmd = f"EV{int(volume * 20)}A{accel}"
-        else:
-            cmd = f"EV{int(volume * 20)}d{duration}"
+    def inject(self, flow_rate, position=0):
+        
+        cmd = f"EV{int(flow_rate * 20)}A{position}"
         
         self.send_command(STOP_ALL_ACTIONS)
         self.send_command(cmd)
@@ -133,17 +138,21 @@ class Pump(SerialDevice):
         volume_units = int(volume_ml * 20)
         self.send_command(f"EV{volume_units}A{accel}")
 
-    def fast_empty(self, volume_ml: float):
+    def fast_empty(self, flush_rate: float):
         """
         Fast emptying using IV command at A0.
         """
-        self.send_command(STOP_ALL_ACTIONS)
-        volume_units = int(volume_ml * 20)
-        self.send_command(f"IV{volume_units}A0")
+        cmd = f"IV{int(flush_rate * 20)}A0"
 
-    def withdraw(self, volume):
         self.send_command(STOP_ALL_ACTIONS)
-        self.send_command(f"OV{volume}A6000")
+        self.send_command(cmd)
+
+    def withdraw(self, flow_rate):
+
+        cmd = f"OV{int(flow_rate * 20)}A6000"     
+
+        self.send_command(STOP_ALL_ACTIONS)
+        self.send_command(cmd)
 
     def debubble(self, volume, duration):
         self.send_command(STOP_ALL_ACTIONS)
@@ -155,11 +164,13 @@ class Pump(SerialDevice):
         Based off of the function pump_flow_rate
         """
         pass
-    def clean_pump(self, flush_volume=10, withdraw_volume=300):
+    def clean_pump(self, flush_rate=10, withdraw_rate=30):
         """
         Based off of PumpCleaning_pumpSample1
         """
         # NOTE: Why are we even withdrawing to begin with? whats this for and what are we withdrawing
-        self.fast_empty(flush_volume)
-        self.withdraw(withdraw_volume)
-        self.fast_empty(flush_volume)
+        self.fast_empty(flush_rate)
+        self.wait_until_ready()
+        self.withdraw(withdraw_rate)
+        self.wait_until_ready()
+        self.fast_empty(flush_rate)

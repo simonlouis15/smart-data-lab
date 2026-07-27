@@ -1,6 +1,6 @@
 import json
 
-from loguru import logging
+from loguru import logger
 
 from device_discovery import DeviceDiscovery, DeviceManager
 
@@ -12,53 +12,53 @@ Shows how to use device discovery to automatically configure lab equipment
 
 def main():
     
-    logging.INFO("Automatic Laboratory Device Setup")
-    logging.INFO("=" * 50)
+    logger.info("Automatic Laboratory Device Setup")
+    logger.info("=" * 50)
     
     # Discover all connected devices
-    logging.INFO("\n1. Discovering connected devices...")
+    logger.info("\n1. Discovering connected devices...")
     discovery = DeviceDiscovery()
     devices = discovery.scan_all_devices()
     
-    logging.INFO(discovery.get_device_summary())
+    logger.info(discovery.get_device_summary())
     
     # Auto-configure devices
-    logging.INFO("\n2. Auto-configuring devices...")
+    logger.info("\n2. Auto-configuring devices...")
     config = discovery.auto_configure_devices()
     
     # Show configuration
-    logging.INFO("\n3. Device Configuration:")
-    logging.INFO(json.dumps(config, indent=2, default=str))
+    logger.info("\n3. Device Configuration:")
+    logger.info(json.dumps(config, indent=2, default=str))
     
     # Save configuration for future use
     discovery.save_configuration('my_lab_config.json')
-    logging.INFO("\n4. Configuration saved to 'my_lab_config.json'")
+    logger.info("\n4. Configuration saved to 'my_lab_config.json'")
     
     # Example of using discovered devices
-    logging.INFO("\n5. Device Usage Examples:")
+    logger.info("\n5. Device Usage Examples:")
     
     # Show how to use pumps
     if config['pumps']:
-        logging.INFO("\nHamilton Pumps detected:")
+        logger.info("\nHamilton Pumps detected:")
         for i, pump in enumerate(config['pumps']):
-            logging.INFO(f"  Pump {i+1}: {pump['port']} at {pump['baudrate']} baud")
-            logging.INFO(f"    Usage: SerialDevice('{pump['port']}', {pump['baudrate']})")
+            logger.info(f"  Pump {i+1}: {pump['port']} at {pump['baudrate']} baud")
+            logger.info(f"    Usage: SerialDevice('{pump['port']}', {pump['baudrate']})")
     
     # Show how to use valves
     if config['valves']:
-        logging.INFO("\nSelector Valves detected:")
+        logger.info("\nSelector Valves detected:")
         for i, valve in enumerate(config['valves']):
-            logging.INFO(f"  Valve {i+1}: {valve['port']} at {valve['baudrate']} baud")
-            logging.INFO(f"    Usage: SelectorValve('{valve['port']}', {valve['baudrate']})")
+            logger.info(f"  Valve {i+1}: {valve['port']} at {valve['baudrate']} baud")
+            logger.info(f"    Usage: SelectorValve('{valve['port']}', {valve['baudrate']})")
     
     # Show how to use DAQ
     if config['daq']:
-        logging.INFO("\nDAQ Devices detected:")
+        logger.info("\nDAQ Devices detected:")
         for i, daq in enumerate(config['daq']):
-            logging.INFO(f"  DAQ {i+1}: {daq['name']} ({daq['type']})")
+            logger.info(f"  DAQ {i+1}: {daq['name']} ({daq['type']})")
             if daq['ai_channels']:
-                logging.INFO(f"    AI Channel: {daq['ai_channels'][0]}")
-                logging.INFO(f"    Usage: DAQDevice('{daq['ai_channels'][0]}', 3)")
+                logger.info(f"    AI Channel: {daq['ai_channels'][0]}")
+                logger.info(f"    Usage: DAQDevice('{daq['ai_channels'][0]}', 3)")
     
     return config
 
@@ -100,44 +100,44 @@ def create_dynamic_device_config():
     with open('auto_device_init.py', 'w') as f:
         f.write('\n'.join(init_code))
     
-    logging.INFO("Auto-initialization code saved to 'auto_device_init.py'")
+    logger.info("Auto-initialization code saved to 'auto_device_init.py'")
     return init_code
 
 def test_device_connections():
     """Test connections to all discovered devices."""
     
-    logging.INFO("\nTesting device connections...")
+    logger.info("\nTesting device connections...")
     discovery = DeviceDiscovery()
     discovery.scan_all_devices()
     config = discovery.auto_configure_devices()
     
     # Test pump connections
-    logging.INFO("\nTesting pump connections:")
+    logger.info("\nTesting pump connections:")
     for pump in config.get('pumps', []):
         success = discovery.test_device_connection(pump['port'], pump['baudrate'])
         status = "✓ OK" if success else "✗ FAILED"
-        logging.INFO(f"  {pump['name']} on {pump['port']}: {status}")
+        logger.info(f"  {pump['name']} on {pump['port']}: {status}")
     
     # Test valve connections
-    logging.INFO("\nTesting valve connections:")
+    logger.info("\nTesting valve connections:")
     for valve in config.get('valves', []):
         success = discovery.test_device_connection(valve['port'], valve['baudrate'])
         status = "✓ OK" if success else "✗ FAILED"
-        logging.INFO(f"  {valve['name']} on {valve['port']}: {status}")
+        logger.info(f"  {valve['name']} on {valve['port']}: {status}")
     
     # Test DAQ availability
-    logging.INFO("\nTesting DAQ devices:")
+    logger.info("\nTesting DAQ devices:")
     for daq in config.get('daq', []):
-        logging.INFO(f"  {daq['name']}: ✓ Available")
+        logger.info(f"  {daq['name']}: ✓ Available")
 
 if __name__ == "__main__":
     # Run main discovery
     config = main()
     
     # Generate dynamic initialization code
-    logging.INFO("\n" + "=" * 50)
+    logger.info("\n" + "=" * 50)
     create_dynamic_device_config()
     
     # Test connections
-    logging.INFO("\n" + "=" * 50)
+    logger.info("\n" + "=" * 50)
     test_device_connections()

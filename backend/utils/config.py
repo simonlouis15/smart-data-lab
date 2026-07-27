@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from loguru import logging
+from loguru import logger
 
 """
 Helper functions to return the parameters for the requested device from config.json
@@ -23,7 +23,7 @@ def load_pump_config():
         return pumps
 
     except Exception as e:
-        logging.ERROR(f"Could not load config.json: {e}")
+        logger.error(f"Could not load config.json: {e}")
 
 def load_valves_config():
     valves = {}
@@ -39,7 +39,7 @@ def load_valves_config():
         return valves
 
     except Exception as e:
-        logging.ERROR(f"Could not load config.json: {e}")
+        logger.error(f"Could not load config.json: {e}")
 
 def load_daq_config():
     daqs = {}
@@ -55,7 +55,7 @@ def load_daq_config():
         return daqs
 
     except Exception as e:
-        logging.ERROR(f"Could not load config.json: {e}")
+        logger.error(f"Could not load config.json: {e}")
 
 
 def load_VD_config():
@@ -73,5 +73,5 @@ def load_VD_config():
         return vd_config
 
     except Exception as e:
-        logging.ERROR(f"Could not load VD config from config.json: {e}")
+        logger.error(f"Could not load VD config from config.json: {e}")
         return None

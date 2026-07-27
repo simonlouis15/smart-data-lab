@@ -18,7 +18,7 @@ In this case, experiment uses 3-4 connections which houses the 3 pumps, air, and
 import time
 import logging
 
-from serial_device import SerialDevice
+from modules.serial_device import SerialDevice
 
 logging.basicConfig(level=logging.INFO)
 

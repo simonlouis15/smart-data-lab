@@ -5,6 +5,7 @@ import VD_Measurements from './components/VDMeasurements';
 import HC_Measurements from './components/HCMeasurements';
 import CleaningOperations from './components/CleaningOperations/page';
 import Routine_Manager from './components/RoutineManager';
+import Controls from './components/Controls/page';
 
 const navigation = [
   { name: 'Devices', href: '/components/Devices' },
@@ -12,6 +13,7 @@ const navigation = [
   { name: 'HC Measurements', href: '/components/HC_Measurements' },
   { name: 'Cleaning Operations', href: '/components/CleaningOperations' },
   { name: 'Routine Manager', href: '/components/Routine_Manager' },
+  { name: 'Controls', href: '/components/Controls' },
 ];
 
 function classNames(...classes: string[]) {
@@ -55,6 +57,7 @@ export default function App() {
         {current == 'HC Measurments' && <HC_Measurements />}
         {current == 'Cleaning Operations' && <CleaningOperations />}
         {current == 'Routine Manager' && <Routine_Manager />}
+        {current == 'Controls' && <Controls />}
       </div>
     </>
   );

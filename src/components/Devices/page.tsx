@@ -314,18 +314,13 @@ export default function Devices() {
                     ? 'border-green-200 bg-green-50 text-green-700'
                     : 'border-red-200 bg-red-50 text-red-600'
                 }`}
-            >
-              <div className='flex items-center justify-between w-full'>
-                <p>{importMessage}</p>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setImportState('idle')
-                  }
-                >
-                  <XMarkIcon className='mx-auto size-6 hover:text-red-400' />
-                </button>
-              </div>
+              >
+                <div className="flex items-center justify-between w-full">
+                  <p>{importMessage}</p>
+                  <button type="button" onClick={() => setImportState('idle')}>
+                    <XMarkIcon className="mx-auto size-6 hover:text-red-400" />
+                  </button>
+                </div>
                 {importIssues.length > 0 && (
                   <ul className="mt-1 list-disc pl-5 text-xs text-gray-500">
                     {importIssues.map((issue) => (

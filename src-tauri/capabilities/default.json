@@ -8,6 +8,133 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "shell:default"
+    "shell:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "args": [
+            "valve",
+            "--port",
+            {
+              "validator": "\\S+"
+            },
+            "--name",
+            {
+              "validator": "\\S.*\\S|\\S"
+            },
+            "--mode",
+            {
+              "validator": "sample|air|solvent"
+            },
+            "--baudrate",
+            {
+              "validator": "\\d+"
+            },
+            "--bytesize",
+            {
+              "validator": "[5678]"
+            },
+            "--parity",
+            {
+              "validator": "none|even|odd|mark|space"
+            },
+            "--stopbits",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            },
+            "--timeout",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            },
+            "--xonxoff",
+            {
+              "validator": "true|false"
+            },
+            "--rtscts",
+            {
+              "validator": "true|false"
+            },
+            "--dsrdtr",
+            {
+              "validator": "true|false"
+            },
+            "--write_timeout",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            }
+          ],
+          "name": "main-valve",
+          "sidecar": true
+        },
+        {
+          "args": [
+            "pump",
+            "--port",
+            {
+              "validator": "\\S+"
+            },
+            "--pump_num",
+            {
+              "validator": "\\d+"
+            },
+            "--name",
+            {
+              "validator": "\\S.*\\S|\\S"
+            },
+            "--option",
+            {
+              "validator": "initialize|withdraw_sample|inject_sample|flush_to_waste"
+            },
+            "--flow_rate",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            },
+            "--syringe_volume",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            },
+            "--baudrate",
+            {
+              "validator": "\\d+"
+            },
+            "--bytesize",
+            {
+              "validator": "[5678]"
+            },
+            "--parity",
+            {
+              "validator": "none|even|odd|mark|space"
+            },
+            "--stopbits",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            },
+            "--timeout",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            },
+            "--xonxoff",
+            {
+              "validator": "true|false"
+            },
+            "--rtscts",
+            {
+              "validator": "true|false"
+            },
+            "--dsrdtr",
+            {
+              "validator": "true|false"
+            },
+            "--write_timeout",
+            {
+              "validator": "\\d+(\\.\\d+)?"
+            }
+          ],
+          "name": "main-pump",
+          "sidecar": true
+        }
+      ]
+    }
   ]
 }
