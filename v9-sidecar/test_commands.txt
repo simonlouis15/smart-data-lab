@@ -1,0 +1,143 @@
+==============================================================================
+ v9-sidecar CLI — manual test commands (pump, valve, routines)
+==============================================================================
+
+Ports below match backend/config/config.json. VERIFY they match your rig
+before running — the CLI opens the exact --port you pass.
+
+  Pumps                         Valves
+  -----                         ------
+  Sample 1  -> COM10            Main Selector    -> COM9  (10-port)
+  Sample 2  -> COM7             Pump Selector 1  -> COM3  (28-port, Sample 1)
+  Sample 3  -> COM8             Pump Selector 2  -> COM4  (28-port, Sample 2)
+  Solvent   -> COM6             Pump Selector 3  -> COM11 (28-port, Sample 3)
+  HC Sample -> COM14
+  HC Ref    -> COM5
+
+How to run (dev, from the v9-sidecar/ folder using uv):
+    uv run cli.py <subcommand> <args...>
+
+Or with the bundled exe (from anywhere):
+    ..\src-tauri\v9-sidecar-x86_64-pc-windows-msvc.exe <subcommand> <args...>
+
+Get help for any subcommand:
+    uv run cli.py --help
+    uv run cli.py valve --help
+    uv run cli.py pump --help
+    uv run cli.py routine --help
+
+NOTE (PowerShell): the routine payloads below are single-quoted with the inner
+double quotes escaped as \" so PowerShell passes them through as one JSON
+string. In cmd.exe / bash, adjust quoting accordingly.
+
+
+==============================================================================
+ 1. VALVE COMMANDS
+==============================================================================
+
+--- 1a. Main 10-port valve (COM9): named modes ---------------------------
+# sample/injection = GO03, air = GO09, solvent = GO01
+uv run cli.py valve --port COM9 --positions 10 --mode injection
+uv run cli.py valve --port COM9 --positions 10 --mode sample
+uv run cli.py valve --port COM9 --positions 10 --mode air
+uv run cli.py valve --port COM9 --positions 10 --mode solvent
+
+--- 1b. Main 10-port valve: raw position ---------------------------------
+uv run cli.py valve --port COM9 --positions 10 --position 5
+
+--- 1c. 28-port pump valve (COM3): reserved presets ----------------------
+# solvent port = 27, air port = 28
+uv run cli.py valve --port COM3 --positions 28 --preset solvent
+uv run cli.py valve --port COM3 --positions 28 --preset air
+
+--- 1d. 28-port pump valve: route a chemical by letter -------------------
+# chemical A -> port 1, B -> 2, ... (needs --num-chemicals for the mapping)
+uv run cli.py valve --port COM3 --positions 28 --chemical A --num-chemicals 26
+uv run cli.py valve --port COM3 --positions 28 --chemical C --num-chemicals 26
+
+--- 1e. 28-port pump valve: raw position ---------------------------------
+uv run cli.py valve --port COM3 --positions 28 --position 14
+
+--- 1f. Other pump valves ------------------------------------------------
+uv run cli.py valve --port COM4  --positions 28 --preset solvent
+uv run cli.py valve --port COM11 --positions 28 --preset air
+
+
+==============================================================================
+ 2. PUMP COMMANDS  (Sample 1 on COM10 used as the example)
+==============================================================================
+
+--- 2a. Initialize (defaults to 30 mL syringe) ---------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option initialize
+uv run cli.py pump --port COM10 --pump-num 1 --option initialize --syringe-size 10
+
+--- 2b. Withdraw (aspirate): --speed required, --position optional (def 6000)
+uv run cli.py pump --port COM10 --pump-num 1 --option withdraw --speed 300
+uv run cli.py pump --port COM10 --pump-num 1 --option withdraw --speed 300 --position 3000
+
+--- 2c. Inject (mL/min flow rate; converts like pump_flow_rate) ----------
+# --rate required; --injection-time (min, def 1) and --syringe-volume (mL, def 10) optional
+uv run cli.py pump --port COM10 --pump-num 1 --option inject --rate 0.3
+uv run cli.py pump --port COM10 --pump-num 1 --option inject --rate 0.5 --injection-time 2 --syringe-volume 10
+
+--- 2d. Full injection (dispense to a position) --------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option full-injection --rate 10 --position 0
+uv run cli.py pump --port COM10 --pump-num 1 --option full-injection --rate 10 --position 4500
+
+--- 2e. Empty (push everything out) --------------------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option empty --rate 10
+
+--- 2f. Debubble (--rate and --duration required) ------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option debubble --rate 5 --duration 6000
+
+--- 2g. Clean (empty -> withdraw -> empty) -------------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option clean
+uv run cli.py pump --port COM10 --pump-num 1 --option clean --rate 10 --speed 300
+
+--- 2h. Query current position ------------------------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option query-position
+
+--- 2i. Stop -------------------------------------------------------------
+uv run cli.py pump --port COM10 --pump-num 1 --option stop
+
+
+==============================================================================
+ 3. ROUTINE COMMANDS  (multi-step; run inside the sidecar with V9 timing)
+==============================================================================
+
+--- 3a. switch-sample: line clean/prime for one pump + its 28-port valve --
+# Sample 1 (COM10) + Pump Selector 1 (COM3)
+uv run cli.py routine --routine switch-sample --payload '{\"pump\": {\"Port\": \"COM10\", \"Pump Number\": 1}, \"valve\": {\"Port\": \"COM3\", \"Positions\": 28}}'
+
+# Sample 2 (COM7) + Pump Selector 2 (COM4)
+uv run cli.py routine --routine switch-sample --payload '{\"pump\": {\"Port\": \"COM7\", \"Pump Number\": 1}, \"valve\": {\"Port\": \"COM4\", \"Positions\": 28}}'
+
+--- 3b. jar-switch: route valve to a chemical, then prime -----------------
+# Route Sample 1's valve to chemical C (out of 26) and prime the line
+uv run cli.py routine --routine jar-switch --payload '{\"pump\": {\"Port\": \"COM10\", \"Pump Number\": 1}, \"valve\": {\"Port\": \"COM3\", \"Positions\": 28}, \"chemical\": \"C\", \"num_chemicals\": 26}'
+
+# Same, but with an explicit number of prime/clean cycles (default is 3)
+uv run cli.py routine --routine jar-switch --payload '{\"pump\": {\"Port\": \"COM10\", \"Pump Number\": 1}, \"valve\": {\"Port\": \"COM3\", \"Positions\": 28}, \"chemical\": \"A\", \"num_chemicals\": 26, \"cycles\": 2}'
+
+--- 3c. flow-rate: concurrent dosing through the main valve --------------
+# One pump at 0.3 mL/min (main valve = Main Selector on COM9)
+uv run cli.py routine --routine flow-rate --payload '{\"main_valve\": {\"Port\": \"COM9\", \"Positions\": 10}, \"pumps\": [{\"config\": {\"Port\": \"COM10\", \"Pump Number\": 1}, \"rate\": 0.3}]}'
+
+# Three pumps injecting simultaneously at different rates
+uv run cli.py routine --routine flow-rate --payload '{\"main_valve\": {\"Port\": \"COM9\", \"Positions\": 10}, \"pumps\": [{\"config\": {\"Port\": \"COM10\", \"Pump Number\": 1}, \"rate\": 0.3}, {\"config\": {\"Port\": \"COM7\", \"Pump Number\": 1}, \"rate\": 0.2}, {\"config\": {\"Port\": \"COM8\", \"Pump Number\": 1}, \"rate\": 0.1}]}'
+
+# Override injection time (min) and syringe volume (mL); defaults are 1 and 10
+uv run cli.py routine --routine flow-rate --payload '{\"main_valve\": {\"Port\": \"COM9\", \"Positions\": 10}, \"pumps\": [{\"config\": {\"Port\": \"COM10\", \"Pump Number\": 1}, \"rate\": 0.5}], \"injection_time\": 2, \"syringe_volume\": 10}'
+
+
+==============================================================================
+ 4. QUICK NO-HARDWARE SANITY CHECKS (should error cleanly, not crash)
+==============================================================================
+# Missing required flag -> clean SystemExit message
+uv run cli.py pump --port COM10 --option withdraw
+
+# Bad JSON payload -> "--payload is not valid JSON"
+uv run cli.py routine --routine switch-sample --payload "not json"
+
+# Missing payload key -> "payload missing key: 'pump'"
+uv run cli.py routine --routine switch-sample --payload '{}'

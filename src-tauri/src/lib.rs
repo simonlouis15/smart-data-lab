@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
 
 // Embedded at compile time — no filesystem lookup needed at runtime.
 const DEFAULT_CONFIG: &str = include_str!("../../backend/config/config.json");
@@ -313,6 +314,195 @@ fn import_pump_configs(
 
 
 
+// -------------------------
+// Sidecar (v9-sidecar) execution
+// -------------------------
+
+/// Result of a single one-shot sidecar invocation, surfaced to the frontend.
+#[derive(Debug, Serialize)]
+pub struct SidecarResult {
+    success: bool,
+    code: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+/// Optional pump action parameters. Only the flags relevant to the chosen
+/// `option` need to be provided; the rest are omitted from the CLI call.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PumpAction {
+    /// One of: initialize, withdraw, inject, full-injection, empty, debubble,
+    /// clean, stop, query-position
+    option: String,
+    rate: Option<f64>,
+    speed: Option<i64>,
+    position: Option<i64>,
+    duration: Option<i64>,
+    injection_time: Option<f64>,
+    syringe_volume: Option<f64>,
+    syringe_size: Option<i64>,
+}
+
+/// Build the shared serial-connection flags from a device's SerialConfig.
+fn serial_args(cfg: &SerialConfig) -> Vec<String> {
+    vec![
+        "--port".into(),
+        cfg.port.clone(),
+        "--baudrate".into(),
+        cfg.baudrate.to_string(),
+        "--bytesize".into(),
+        cfg.bytesize.to_string(),
+        "--parity".into(),
+        cfg.parity.clone(),
+        "--stopbits".into(),
+        cfg.stopbits.to_string(),
+        "--timeout".into(),
+        cfg.timeout.to_string(),
+        "--xonxoff".into(),
+        cfg.xonxoff.to_string(),
+        "--rtscts".into(),
+        cfg.rtscts.to_string(),
+        "--dsrdtr".into(),
+        cfg.dsrdtr.to_string(),
+        "--write-timeout".into(),
+        cfg.write_timeout.to_string(),
+    ]
+}
+
+/// Spawn the bundled v9-sidecar binary with the given args and collect output.
+async fn run_sidecar(app: &tauri::AppHandle, args: Vec<String>) -> Result<SidecarResult, String> {
+    let command = app
+        .shell()
+        .sidecar("v9-sidecar")
+        .map_err(|e| format!("Failed to locate v9-sidecar: {e}"))?
+        .args(args);
+
+    let output = command
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run v9-sidecar: {e}"))?;
+
+    Ok(SidecarResult {
+        success: output.status.success(),
+        code: output.status.code(),
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
+/// Move a selector valve.
+///
+/// Provide `mode` for the 10-port main valve (sample|air|solvent), or
+/// `position` for a raw position (e.g. a 28-port valve port resolved from the
+/// valve's `Connections` map on the frontend).
+#[tauri::command]
+async fn move_valve(
+    app: tauri::AppHandle,
+    name: String,
+    valve: SelectorValveConfig,
+    mode: Option<String>,
+    position: Option<u32>,
+) -> Result<SidecarResult, String> {
+    let mut args = vec!["valve".to_string()];
+    args.extend(serial_args(&valve.serial));
+    args.push("--name".into());
+    args.push(name);
+    args.push("--positions".into());
+    args.push(valve.positions.to_string());
+
+    match (mode, position) {
+        (Some(m), _) => {
+            args.push("--mode".into());
+            args.push(m);
+        }
+        (None, Some(p)) => {
+            args.push("--position".into());
+            args.push(p.to_string());
+        }
+        (None, None) => return Err("move_valve requires either `mode` or `position`".into()),
+    }
+
+    run_sidecar(&app, args).await
+}
+
+/// Run a single pump action.
+#[tauri::command]
+async fn run_pump(
+    app: tauri::AppHandle,
+    name: String,
+    pump: PumpConfig,
+    action: PumpAction,
+) -> Result<SidecarResult, String> {
+    let mut args = vec!["pump".to_string()];
+    args.extend(serial_args(&pump.serial));
+    args.push("--name".into());
+    args.push(name);
+    args.push("--pump-num".into());
+    args.push(pump.pump_number.to_string());
+    args.push("--option".into());
+    args.push(action.option);
+
+    if let Some(v) = action.rate {
+        args.push("--rate".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = action.speed {
+        args.push("--speed".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = action.position {
+        args.push("--position".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = action.duration {
+        args.push("--duration".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = action.injection_time {
+        args.push("--injection-time".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = action.syringe_volume {
+        args.push("--syringe-volume".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = action.syringe_size {
+        args.push("--syringe-size".into());
+        args.push(v.to_string());
+    }
+
+    run_sidecar(&app, args).await
+}
+
+/// Run a multi-step pump/valve routine ported from V9.
+///
+/// The routine runs inside the sidecar over persistent serial connections
+/// (preserving V9 ordering/timing/threading). `payload` carries whole device
+/// configs and routine parameters and is forwarded verbatim as JSON to the
+/// sidecar's `routine --payload` flag. The frontend assembles the payload from
+/// the device configs it already holds. Supported routines: `switch-sample`,
+/// `jar-switch`, `flow-rate`.
+#[tauri::command]
+async fn run_routine(
+    app: tauri::AppHandle,
+    routine: String,
+    payload: Value,
+) -> Result<SidecarResult, String> {
+    let payload_str = serde_json::to_string(&payload)
+        .map_err(|e| format!("Failed to serialize routine payload: {e}"))?;
+
+    let args = vec![
+        "routine".to_string(),
+        "--routine".into(),
+        routine,
+        "--payload".into(),
+        payload_str,
+    ];
+
+    run_sidecar(&app, args).await
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -345,7 +535,12 @@ pub fn run() {
                 pump_config_exists,
                 update_pump_config,
                 delete_pump_config,
-                import_pump_configs
+                import_pump_configs,
+
+                // Sidecar hardware control
+                move_valve,
+                run_pump,
+                run_routine
             ]
         )
 

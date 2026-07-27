@@ -1,0 +1,19 @@
+[project]
+name = "v9-sidecar"
+version = "0.1.0"
+description = "Side-effect-free CLI wrapper around the V9 pump and selector-valve hardware, bundleable as a Tauri sidecar."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pyserial>=3.5",
+    "loguru>=0.7.0",
+    "pyinstaller>=6.21.0",
+]
+
+[project.scripts]
+v9-sidecar = "cli:main"
+
+[tool.uv]
+package = false
+# Use the OS certificate store; this environment's default bundle fails PyPI TLS.
+system-certs = true
