@@ -184,11 +184,18 @@ class Pump(SerialDevice):
     def _frame(self, command: str) -> str:
         return f"/{self.pump_num}{command}R\r\n"
 
-    def wait_until_ready(self, max_attempts: int = 100):
+    def wait_until_ready(self, max_attempts: int = 100_000):
         """Poll the 'F' status command until the pump is idle.
 
         Replicates the V9 PumpReady_* logic: read the raw response and inspect
         byte index 2; '@' (busy) and 'o' (moving) mean keep waiting.
+
+        A slow move (e.g. a full-stroke withdraw) can take far longer than a
+        handful of polls, so we keep waiting like the V9 `while True` loop
+        rather than giving up early -- returning too soon lets the next command
+        interrupt the move, which cuts a withdraw short. A blank/timed-out read
+        yields an empty status and is treated as "still busy" so a dropped
+        response never counts as ready.
         """
         for _ in range(max_attempts):
             self.write(self._frame("F"))
@@ -197,7 +204,7 @@ class Pump(SerialDevice):
             time.sleep(0.1)
             status = raw[2:3].decode("utf-8", errors="ignore")
             time.sleep(1)
-            if status not in ("@", "o"):
+            if status and status not in ("@", "o"):
                 return status
         return None
 

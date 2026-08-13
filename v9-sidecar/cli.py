@@ -157,6 +157,81 @@ def pump_controls(args):
         pump.close()
 
 
+def vd_controls(args):
+    """Drive the XtalX viscosity/density (D/V) sensor.
+
+    Two actions:
+      - ``detect``: auto-detect a connected sensor and print its serial number.
+      - ``measure``: run the V9 adaptive-averaging loop and print the mean
+        viscosity / density / temperature (plus per-reading samples).
+
+    Result is emitted as a single JSON object on stdout so the Tauri frontend
+    can parse it; human-readable progress goes to stderr via loguru.
+    """
+    import vd_sensor
+
+    if args.action == "detect":
+        logger.info("Auto-detecting D/V sensor")
+        result = vd_sensor.detect()
+    else:
+        sensor_cfg = vd_sensor.SensorConfig(
+            serial_number=args.serial or "",
+            verbose=str2bool(args.verbose),
+            track_impedance=str2bool(args.track_impedance),
+            peak_center_reference=args.peak_center_reference,
+            peak_center_tolerance=args.peak_center_tolerance,
+            peak_width_reference=args.peak_width_reference,
+            peak_width_tolerance=args.peak_width_tolerance,
+        )
+        routine_cfg = vd_sensor.RoutineConfig(
+            measurements=args.measurements,
+            batch_size=args.batch_size,
+            viscosity_std=args.viscosity_std,
+            density_std=args.density_std,
+            warmup_secs=args.warmup,
+            max_samples=args.max_samples,
+        )
+        logger.info(
+            f"VD measure: serial='{sensor_cfg.serial_number or 'auto'}', "
+            f"seed={routine_cfg.measurements}, batch={routine_cfg.batch_size}, "
+            f"Vstd<={routine_cfg.viscosity_std}, Dstd<={routine_cfg.density_std}"
+        )
+        result = vd_sensor.measure(sensor_cfg, routine_cfg)
+        if result.get("converged"):
+            logger.info(
+                f"Converged: V={result['mean_viscosity_cp']:.4f} cP, "
+                f"D={result['mean_density_g_per_ml']:.5f} g/mL, "
+                f"T={result['mean_temp_c']:.3f} C"
+            )
+        else:
+            logger.warning("Did not converge within max samples")
+
+    print(json.dumps(result))
+
+
+def hc_controls(args):
+    """Run a heat-capacity (HC) measurement described by a JSON payload.
+
+    The payload carries the sample/reference pump configs, the DAQ config and
+    the experiment/stabilization/fluid parameters (same keys as
+    ``backend/config/config.json`` for the devices). The sidecar drives the two
+    HC pumps and the NI DAQ through the differential-flow-calorimetry protocol
+    and prints a single JSON result object on stdout (per-step stabilization
+    outcomes, the voltage trace, and the regressed heat capacity); progress
+    goes to stderr via loguru.
+    """
+    import hc_measurement
+
+    try:
+        payload = json.loads(args.payload)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"--payload is not valid JSON: {e}")
+
+    logger.info("HC measurement started")
+    result = hc_measurement.measure_from_payload(payload, logger=logger)
+    print(json.dumps(result))
+
+
 def routine_controls(args):
     """Run a multi-device pump/valve routine described by a JSON payload.
 
@@ -287,6 +362,41 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON payload with device configs and routine parameters",
     )
     routine.set_defaults(func=routine_controls)
+
+    # ---- vd (viscosity / density sensor) ----
+    vd = subparsers.add_parser(
+        "vd", help="XtalX viscosity/density (D/V) sensor measurement"
+    )
+    vd.add_argument(
+        "--action", default="measure", choices=["measure", "detect"],
+        help="detect a sensor's serial number, or run a measurement",
+    )
+    # Sensor identification + resonance-peak validation window.
+    vd.add_argument("--serial", default="", help="Sensor serial number (blank = auto-detect)")
+    vd.add_argument("--verbose", default="false", help="Verbose sensor logging")
+    vd.add_argument("--track-impedance", default="false", help="Track impedance (yield_Y off)")
+    vd.add_argument("--peak-center-reference", type=float, default=32776.181)
+    vd.add_argument("--peak-center-tolerance", type=float, default=100.0)
+    vd.add_argument("--peak-width-reference", type=float, default=2.174)
+    vd.add_argument("--peak-width-tolerance", type=float, default=20.0)
+    # Statistical-sampling parameters.
+    vd.add_argument("--measurements", type=int, default=5, help="Initial samples to seed the window")
+    vd.add_argument("--batch-size", type=int, default=5, help="Rolling window size for the std-dev check")
+    vd.add_argument("--viscosity-std", type=float, default=0.1, help="Viscosity std-dev convergence threshold")
+    vd.add_argument("--density-std", type=float, default=0.1, help="Density std-dev convergence threshold")
+    vd.add_argument("--warmup", type=float, default=25.0, help="Warm-up seconds before the first read")
+    vd.add_argument("--max-samples", type=int, default=100, help="Safety cap on total readings")
+    vd.set_defaults(func=vd_controls)
+
+    # ---- hc (heat-capacity measurement) ----
+    hc = subparsers.add_parser(
+        "hc", help="Heat-capacity measurement (differential flow calorimetry)"
+    )
+    hc.add_argument(
+        "--payload", required=True,
+        help="JSON payload with pump/DAQ configs and experiment parameters",
+    )
+    hc.set_defaults(func=hc_controls)
 
     return parser
 

@@ -1,12 +1,35 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+# vd_sensor and hc_measurement are imported lazily (inside cli.vd_controls /
+# cli.hc_controls), so PyInstaller's static analysis won't see them -- list them
+# explicitly. The SDKs they use (XtalX for vd; nidaqmx for hc) are also lazy
+# imports; pull in everything they need when installed in the build env, and
+# degrade gracefully (the subcommand still errors cleanly at runtime) when not.
+hiddenimports = ['vd_sensor', 'hc_measurement']
+datas = []
+binaries = []
+
+try:
+    from PyInstaller.utils.hooks import collect_all
+
+    for _pkg in ('xtalx', 'libusb_package', 'nidaqmx'):
+        try:
+            _datas, _binaries, _hidden = collect_all(_pkg)
+            datas += _datas
+            binaries += _binaries
+            hiddenimports += _hidden
+        except Exception:
+            pass
+except Exception:
+    pass
+
 
 a = Analysis(
     ['cli.py'],
     pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=[],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

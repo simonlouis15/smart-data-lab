@@ -198,6 +198,25 @@ fn get_valve_configs(app: tauri::AppHandle) -> Result<Value, String> {
 }
 
 
+#[tauri::command]
+fn get_daq_configs(app: tauri::AppHandle) -> Result<Value, String> {
+    let config = read_config(&app)?;
+    get_device_configs(&config, "DAQs")
+}
+
+
+/// Return the "VD Routine" section of the config so the frontend can seed the
+/// V/D measurement form with the saved sensor + routine defaults.
+#[tauri::command]
+fn get_vd_config(app: tauri::AppHandle) -> Result<Value, String> {
+    let config = read_config(&app)?;
+    config
+        .get("VD Routine")
+        .cloned()
+        .ok_or_else(|| "VD Routine section not found in config".to_string())
+}
+
+
 // -------------------------
 // Pump Operations
 // -------------------------
@@ -503,6 +522,117 @@ async fn run_routine(
     run_sidecar(&app, args).await
 }
 
+/// Parameters for a viscosity/density sensor run, forwarded to the sidecar's
+/// `vd` subcommand. Every field except `action` is optional; omitted fields
+/// fall back to the sidecar's own defaults (which mirror the "VD Routine"
+/// config). `action` is `measure` or `detect`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VdParams {
+    action: String,
+    serial: Option<String>,
+    verbose: Option<bool>,
+    track_impedance: Option<bool>,
+    peak_center_reference: Option<f64>,
+    peak_center_tolerance: Option<f64>,
+    peak_width_reference: Option<f64>,
+    peak_width_tolerance: Option<f64>,
+    measurements: Option<i64>,
+    batch_size: Option<i64>,
+    viscosity_std: Option<f64>,
+    density_std: Option<f64>,
+    warmup: Option<f64>,
+    max_samples: Option<i64>,
+}
+
+/// Run (or detect) the XtalX viscosity/density sensor via the sidecar.
+///
+/// The sidecar prints a single JSON object on stdout (means, std devs and the
+/// raw per-reading samples for `measure`; the serial number for `detect`),
+/// which the frontend parses out of `SidecarResult.stdout`.
+#[tauri::command]
+async fn run_vd(app: tauri::AppHandle, params: VdParams) -> Result<SidecarResult, String> {
+    let mut args = vec!["vd".to_string(), "--action".into(), params.action];
+
+    if let Some(v) = params.serial {
+        args.push("--serial".into());
+        args.push(v);
+    }
+    if let Some(v) = params.verbose {
+        args.push("--verbose".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.track_impedance {
+        args.push("--track-impedance".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.peak_center_reference {
+        args.push("--peak-center-reference".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.peak_center_tolerance {
+        args.push("--peak-center-tolerance".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.peak_width_reference {
+        args.push("--peak-width-reference".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.peak_width_tolerance {
+        args.push("--peak-width-tolerance".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.measurements {
+        args.push("--measurements".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.batch_size {
+        args.push("--batch-size".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.viscosity_std {
+        args.push("--viscosity-std".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.density_std {
+        args.push("--density-std".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.warmup {
+        args.push("--warmup".into());
+        args.push(v.to_string());
+    }
+    if let Some(v) = params.max_samples {
+        args.push("--max-samples".into());
+        args.push(v.to_string());
+    }
+
+    run_sidecar(&app, args).await
+}
+
+/// Run a heat-capacity (HC) measurement via the sidecar's `hc` subcommand.
+///
+/// `payload` carries the sample/reference pump configs, the DAQ config and the
+/// experiment / stabilization / fluid parameters (assembled on the frontend
+/// from the device configs it already holds), and is forwarded verbatim as JSON
+/// to the sidecar's `hc --payload` flag. The sidecar prints a single JSON
+/// result object on stdout (per-step stabilization outcomes, the voltage trace
+/// and the regressed heat capacity), which the frontend parses out of
+/// `SidecarResult.stdout`.
+#[tauri::command]
+async fn run_hc(app: tauri::AppHandle, payload: Value) -> Result<SidecarResult, String> {
+    let payload_str = serde_json::to_string(&payload)
+        .map_err(|e| format!("Failed to serialize HC payload: {e}"))?;
+
+    let args = vec![
+        "hc".to_string(),
+        "--payload".into(),
+        payload_str,
+    ];
+
+    run_sidecar(&app, args).await
+}
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -530,6 +660,8 @@ pub fn run() {
                 // Generic device getters
                 get_pump_configs,
                 get_valve_configs,
+                get_daq_configs,
+                get_vd_config,
 
                 // Pump operations
                 pump_config_exists,
@@ -540,7 +672,9 @@ pub fn run() {
                 // Sidecar hardware control
                 move_valve,
                 run_pump,
-                run_routine
+                run_routine,
+                run_vd,
+                run_hc
             ]
         )
 

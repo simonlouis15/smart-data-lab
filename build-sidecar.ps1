@@ -1,14 +1,18 @@
 # Stop the script immediately if any command fails
 $ErrorActionPreference = "Stop"
 
-# Navigate into the backend directory
-Set-Location backend
+# Navigate into the v9-sidecar directory
+Set-Location v9-sidecar
 
-# Run PyInstaller to package the application
-pyinstaller __main__.spec --noconfirm
+# Ensure the virtual environment is in sync with the locked dependencies
+uv sync
 
-# Copy and rename the executable for the Tauri sidecar configuration
-Copy-Item dist\__main__.exe ..\src-tauri\__main__-x86_64-pc-windows-msvc.exe -Force
+# Run PyInstaller (via uv) to package the CLI into a single executable
+uv run pyinstaller v9-sidecar.spec --noconfirm
+
+# Copy and rename the executable using Tauri's target-triple convention so it
+# is picked up as the `v9-sidecar` external binary (see tauri.conf.json).
+Copy-Item dist\v9-sidecar.exe ..\src-tauri\v9-sidecar-x86_64-pc-windows-msvc.exe -Force
 
 # Return safely to the root directory
 Set-Location ..

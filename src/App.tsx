@@ -54,7 +54,7 @@ export default function App() {
 
         {current == 'Devices' && <Devices />}
         {current == 'V/D Measurements' && <VD_Measurements />}
-        {current == 'HC Measurments' && <HC_Measurements />}
+        {current == 'HC Measurements' && <HC_Measurements />}
         {current == 'Cleaning Operations' && <CleaningOperations />}
         {current == 'Routine Manager' && <Routine_Manager />}
         {current == 'Controls' && <Controls />}

@@ -131,7 +131,33 @@ uv run cli.py routine --routine flow-rate --payload '{\"main_valve\": {\"Port\":
 
 
 ==============================================================================
- 4. QUICK NO-HARDWARE SANITY CHECKS (should error cleanly, not crash)
+ 4. VD SENSOR COMMANDS  (XtalX viscosity/density D/V sensor)
+==============================================================================
+# Requires the `xtalx` package installed AND a sensor connected. The module is
+# imported lazily, so these are the only commands that need the SDK/hardware.
+# Result is printed as a single JSON object on stdout (logs go to stderr).
+
+--- 4a. Auto-detect the sensor's serial number ---------------------------
+uv run cli.py vd --action detect
+
+--- 4b. Measure with defaults (serial auto-detected) ---------------------
+# Defaults mirror backend/config/config.json "VD Routine":
+#   measurements=5, batch-size=5, viscosity-std=0.1, density-std=0.1,
+#   peak center ref 32776.181 (tol 100), peak width ref 2.174 (tol 20)
+uv run cli.py vd --action measure
+
+--- 4c. Measure with an explicit serial + tightened thresholds -----------
+uv run cli.py vd --action measure --serial 12345 --measurements 5 --batch-size 5 --viscosity-std 0.05 --density-std 0.02
+
+--- 4d. Measure with verbose logging and impedance tracking --------------
+uv run cli.py vd --action measure --verbose true --track-impedance true
+
+--- 4e. Override the resonance-peak validation window --------------------
+uv run cli.py vd --action measure --peak-center-reference 32776.181 --peak-center-tolerance 100 --peak-width-reference 2.174 --peak-width-tolerance 20 --warmup 25 --max-samples 100
+
+
+==============================================================================
+ 5. QUICK NO-HARDWARE SANITY CHECKS (should error cleanly, not crash)
 ==============================================================================
 # Missing required flag -> clean SystemExit message
 uv run cli.py pump --port COM10 --option withdraw
